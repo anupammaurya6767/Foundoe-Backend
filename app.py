@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 import os
 import validators
 from kanao.core.kanao import Kanao
-from openai.error import OpenAIError
+from openai import OpenAIError
 
 # Replace 'your_openai_api_key' with your actual OpenAI API key
 from constants.constants import OPENAI_API_KEY
