@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import os
 import validators
 from kanao.core.kanao import Kanao
+from openai.error import OpenAIError
 
 # Replace 'your_openai_api_key' with your actual OpenAI API key
 from constants.constants import OPENAI_API_KEY
@@ -36,42 +37,47 @@ def import_handler(file_type):
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    if 'file' in request.files:
-        file = request.files['file']
-        if file and allowed_file(file.filename):
-            file_type = file.filename.lower().split('.')[-1]
-            handler = import_handler(file_type)
+    try:
+        if 'file' in request.files:
+            file = request.files['file']
+            if file and allowed_file(file.filename):
+                file_type = file.filename.lower().split('.')[-1]
+                handler = import_handler(file_type)
 
-            if handler:
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-                file.save(file_path)
-                result = handler(file_path)
+                if handler:
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+                    file.save(file_path)
+                    result = handler(file_path)
+                else:
+                    return jsonify({'error': 'Unsupported file type'})
             else:
-                return jsonify({'error': 'Unsupported file type'})
+                return jsonify({'error': 'File type not allowed'})
         else:
-            return jsonify({'error': 'File type not allowed'})
-    else:
-        data = request.json
-        if not data:
-            return jsonify({'error': 'No JSON data received'})
+            data = request.json
+            if not data:
+                return jsonify({'error': 'No JSON data received'})
 
-        url = data.get('url')
-        queries = data.get('queries', [])
+            url = data.get('url')
+            queries = data.get('queries', [])
 
-        if not url or not is_valid_url(url):
-            return jsonify({'error': 'Invalid URL'})
+            if not url or not is_valid_url(url):
+                return jsonify({'error': 'Invalid URL'})
 
-        handler = import_handler('url')
-        result = handler(url)
+            handler = import_handler('url')
+            result = handler(url)
 
-    kanao_instance = result.get('kanao_instance')
-    responses = []
-    for query in queries:
-        response_txt = kanao_instance.generate_response(query)
-        responses.append(response_txt)
-    result['responses'] = responses
+        kanao_instance = result.get('kanao_instance')
+        responses = []
+        for query in queries:
+            response_txt = kanao_instance.generate_response(query)
+            responses.append(response_txt)
+        result['responses'] = responses
 
-    return jsonify(result)
+        return jsonify(result)
+    except OpenAIError as e:
+        return jsonify({'error': str(e)}), 500
+    except Exception as e:
+        return jsonify({'error': 'An internal server error occurred'}), 500
 
 if __name__ == '__main__':
     app.run()
